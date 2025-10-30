@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Storage không được sử dụng trong dự án này
+    // Tất cả ảnh sử dụng URL từ các nguồn external (Imgur, etc.)
+    // Không cần upload lên Firebase Storage
+    
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
