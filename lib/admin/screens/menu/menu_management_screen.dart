@@ -10,6 +10,7 @@ import '../../../shared/utils/formatters.dart';
 import '../../../shared/utils/validators.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/error_view.dart';
+import '../categories/category_management_screen.dart';
 
 class MenuManagementScreen extends ConsumerStatefulWidget {
   const MenuManagementScreen({super.key});
@@ -31,6 +32,20 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
         title: const Text('Quản lý thực đơn'),
         backgroundColor: AppColors.adminPrimary,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.category),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CategoryManagementScreen(),
+                ),
+              );
+            },
+            tooltip: 'Quản lý danh mục',
+          ),
+        ],
       ),
       body: categoriesAsync.when(
         data: (categories) => Column(
@@ -134,6 +149,7 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
+//Danh sách món ăn
 class _MenuItemCard extends ConsumerWidget {
   final MenuItem item;
 

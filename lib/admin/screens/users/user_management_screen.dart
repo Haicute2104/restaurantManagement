@@ -235,6 +235,75 @@ class _UserCard extends StatelessWidget {
     }
   }
 
+  Future<void> _editUser(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (context) => _EditUserDialog(user: user),
+    );
+  }
+
+  Future<void> _deleteUser(BuildContext context) async {
+    // Không cho xóa customer
+    if (user.role == UserRole.customer) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể xóa tài khoản khách hàng'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: Text('Bạn có chắc muốn xóa tài khoản "${user.displayName}"?\n\nLưu ý: Không thể khôi phục sau khi xóa.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      // Xóa user document từ Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .delete();
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã xóa tài khoản thành công'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -249,22 +318,62 @@ class _UserCard extends StatelessWidget {
         ),
         title: Text(user.displayName),
         subtitle: Text(user.email),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            color: _getRoleColor().withOpacity(0.2),
-            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-          ),
-          child: Text(
-            _getRoleText(),
-            style: AppTextStyles.caption.copyWith(
-              color: _getRoleColor(),
-              fontWeight: FontWeight.bold,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: _getRoleColor().withOpacity(0.2),
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+              child: Text(
+                _getRoleText(),
+                style: AppTextStyles.caption.copyWith(
+                  color: _getRoleColor(),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
+            if (user.role != UserRole.customer) ...[
+              const SizedBox(width: AppSpacing.xs),
+              PopupMenuButton(
+                icon: const Icon(Icons.more_vert),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20),
+                        SizedBox(width: 8),
+                        Text('Sửa'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Xóa', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _editUser(context);
+                  } else if (value == 'delete') {
+                    _deleteUser(context);
+                  }
+                },
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -464,6 +573,168 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
                                 ),
                               )
                             : const Text('Tạo tài khoản'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditUserDialog extends StatefulWidget {
+  final UserModel user;
+
+  const _EditUserDialog({required this.user});
+
+  @override
+  State<_EditUserDialog> createState() => _EditUserDialogState();
+}
+
+class _EditUserDialogState extends State<_EditUserDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late UserRole _selectedRole;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.user.displayName);
+    _selectedRole = widget.user.role;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      // Update user in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user.uid)
+          .update({
+        'displayName': _nameController.text.trim(),
+        'role': _selectedRole.name,
+      });
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã cập nhật tài khoản thành công!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Sửa thông tin tài khoản',
+                  style: AppTextStyles.heading3,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Email: ${widget.user.email}',
+                  style: AppTextStyles.body2.copyWith(color: Colors.grey),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Họ và tên',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  validator: (value) => Validators.required(value, 'Họ và tên'),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DropdownButtonFormField<UserRole>(
+                  value: _selectedRole,
+                  decoration: InputDecoration(
+                    labelText: 'Vai trò',
+                    prefixIcon: const Icon(Icons.badge),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: UserRole.staff,
+                      child: Text('👨‍🍳 Nhân viên'),
+                    ),
+                    DropdownMenuItem(
+                      value: UserRole.admin,
+                      child: Text('👨‍💼 Quản lý'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedRole = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Hủy'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.adminPrimary,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text('Lưu thay đổi'),
                       ),
                     ),
                   ],

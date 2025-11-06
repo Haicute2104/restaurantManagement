@@ -21,7 +21,7 @@ class DashboardScreen extends ConsumerWidget {
     final todayDate = _getTodayDate();
     final firestoreService = FirestoreService();
     final activeOrdersAsync = ref.watch(activeOrdersProvider);
-    
+
     final now = DateTime.now();
     final currentYear = now.year;
     final currentMonth = now.month;
